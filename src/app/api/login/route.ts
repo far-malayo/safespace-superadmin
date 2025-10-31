@@ -1,7 +1,9 @@
+// /app/api/login/route.ts
 import { NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
-import User from "@/models/User";
 import bcrypt from "bcryptjs";
+import { connectDB } from "@/lib/mongodb";
+import Admin from "@/models/Admin";
+import { signToken } from "@/lib/auth";
 
 export async function POST(req: Request) {
   try {
@@ -9,40 +11,45 @@ export async function POST(req: Request) {
 
     if (!email || !password) {
       return NextResponse.json(
-        { error: "All fields are required." },
+        { message: "Email and password are required." },
         { status: 400 }
       );
     }
 
     await connectDB();
 
-    const user = await User.findOne({ email });
-    if (!user) {
+    const admin = await Admin.findOne({ email });
+    if (!admin) {
       return NextResponse.json(
-        { error: "Invalid email or password." },
+        { message: "Invalid credentials." },
         { status: 401 }
       );
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
+    const isMatch = await bcrypt.compare(password, admin.password);
+    if (!isMatch) {
       return NextResponse.json(
-        { error: "Invalid email or password." },
+        { message: "Invalid credentials." },
         { status: 401 }
       );
     }
 
-    // ✅ Optionally return user info (excluding password)
-    const { _id, name, studentNumber, organization } = user;
-    return NextResponse.json({
-      message: "Login successful!",
-      user: { _id, name, email, studentNumber, organization },
+    // ✅ Create JWT token
+    const token = signToken({
+      id: admin._id,
+      email: admin.email,
     });
+
+    // ✅ Return token
+    return NextResponse.json(
+      {
+        message: "Login successful",
+        token,
+      },
+      { status: 200 }
+    );
   } catch (error) {
     console.error("Login error:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: "Server error" }, { status: 500 });
   }
 }
